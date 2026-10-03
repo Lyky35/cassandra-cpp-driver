@@ -25,6 +25,7 @@
 #include "decoder.hpp"
 #include "frame.hpp"
 #include "protocol.hpp"
+#include "utils.hpp"
 
 using datastax::internal::core::Buffer;
 using datastax::internal::core::BufferVec;
@@ -233,6 +234,23 @@ TEST_F(FrameUnitTest, DetectsTruncatedFrame) {
   // Completing the frame makes it decodable.
   decoder.feed(framed.data() + framed.size() - 1, 1);
   EXPECT_EQ(FrameDecoder::RESULT_OK, decoder.next(&out, &out_size));
+}
+/**
+ * The driver accepts keyspaces as CQL identifiers, so a case sensitive keyspace
+ * reaches us quoted ("CaseSensitive"). Protocol v5 carries the keyspace name in
+ * a dedicated field where the quotes must be removed.
+ */
+TEST_F(FrameUnitTest, UnescapeId) {
+  using datastax::internal::unescape_id;
+
+  EXPECT_EQ("casesensitive", unescape_id("casesensitive"));
+  EXPECT_EQ("CaseSensitive", unescape_id("\"CaseSensitive\""));
+  EXPECT_EQ("", unescape_id(""));
+  EXPECT_EQ("", unescape_id("\"\""));
+  EXPECT_EQ("a\"b", unescape_id("\"a\"\"b\""));
+  // Not a quoted identifier: returned as-is.
+  EXPECT_EQ("\"unterminated", unescape_id("\"unterminated"));
+  EXPECT_EQ("\"mismatched'", unescape_id("\"mismatched'"));
 }
 
 /**

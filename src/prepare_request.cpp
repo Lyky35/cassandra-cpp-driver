@@ -18,6 +18,7 @@
 
 #include "protocol.hpp"
 #include "serialization.hpp"
+#include "utils.hpp"
 
 using namespace datastax::internal::core;
 
@@ -32,10 +33,13 @@ int PrepareRequest::encode(ProtocolVersion version, RequestCallback* callback,
     // <flags> [int] [<keyspace> [string]]
     int32_t flags = 0;
     size_t flags_keyspace_buf_size = sizeof(int32_t); // <flags> [int]
+    // v5 carries the keyspace name itself, not a CQL identifier, so any quoting
+    // the caller supplied has to be removed.
+    String keyspace(unescape_id(this->keyspace()));
 
-    if (!keyspace().empty()) {
+    if (!keyspace.empty()) {
       flags |= CASS_PREPARE_FLAG_WITH_KEYSPACE;
-      flags_keyspace_buf_size += sizeof(uint16_t) + keyspace().size(); // <keyspace> [string]
+      flags_keyspace_buf_size += sizeof(uint16_t) + keyspace.size(); // <keyspace> [string]
     }
 
     bufs->push_back(Buffer(flags_keyspace_buf_size));
@@ -44,8 +48,8 @@ int PrepareRequest::encode(ProtocolVersion version, RequestCallback* callback,
     Buffer& buf = bufs->back();
     size_t pos = buf.encode_int32(0, flags);
 
-    if (!keyspace().empty()) {
-      buf.encode_string(pos, keyspace().data(), static_cast<uint16_t>(keyspace().size()));
+    if (!keyspace.empty()) {
+      buf.encode_string(pos, keyspace.data(), static_cast<uint16_t>(keyspace.size()));
     }
   }
   return length;
