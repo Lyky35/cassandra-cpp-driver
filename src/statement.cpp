@@ -414,7 +414,7 @@ int32_t Statement::encode_begin(ProtocolVersion version, uint16_t element_count,
   Buffer& buf = bufs->back();
   size_t pos = buf.encode_uint16(0, callback->consistency());
 
-  if (version.supports_now_in_seconds()) {
+  if (version.query_flags_size() == sizeof(int32_t)) {
     // v5 widened <flags> to [int] to make room for With_now_in_seconds.
     pos = buf.encode_int32(pos, flags);
   } else {

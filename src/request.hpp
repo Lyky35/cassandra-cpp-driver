@@ -148,7 +148,7 @@ public:
 
   /**
    * Protocol v5 only. Seconds since the epoch to be used as "now" for the
-   * request, superseding the connection's server side time. `CASS_INT64_MIN`
+   * request, superseding the connection's server side time. `CASS_INT32_MIN`
    * means unset, in which case the flag is not sent.
    */
   int32_t now_in_seconds() const { return now_in_seconds_; }

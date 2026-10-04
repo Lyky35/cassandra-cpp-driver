@@ -20,11 +20,14 @@
 
 #include <string.h>
 
+#include "batch_request.hpp"
 #include "buffer.hpp"
 #include "crc.hpp"
 #include "decoder.hpp"
 #include "frame.hpp"
 #include "protocol.hpp"
+#include "query_request.hpp"
+#include "request_callback.hpp"
 #include "utils.hpp"
 
 using datastax::internal::core::Buffer;
@@ -283,4 +286,148 @@ TEST_F(FrameUnitTest, DecodesDuration) {
   EXPECT_EQ(-1, months);
   EXPECT_EQ(0, days);
   EXPECT_EQ(0, nanos);
+}
+
+namespace {
+
+using datastax::internal::core::BatchRequest;
+using datastax::internal::core::QueryRequest;
+using datastax::internal::core::Request;
+using datastax::internal::core::ResponseMessage;
+using datastax::internal::core::SimpleRequestCallback;
+
+/**
+ * The batch encoder only reads settings from the request, so a callback that
+ * swallows the response is enough to drive it.
+ */
+class NoOpRequestCallback : public SimpleRequestCallback {
+public:
+  explicit NoOpRequestCallback(const Request::ConstPtr& request)
+      : SimpleRequestCallback(request) {}
+
+protected:
+  virtual void on_internal_set(ResponseMessage* response) {}
+  virtual void on_internal_error(CassError code, const String& message) {}
+  virtual void on_internal_timeout() {}
+};
+
+/**
+ * Encodes a batch and hands back the trailing <consistency><flags>[...]
+ * parameter buffer, which is the last buffer the encoder appends.
+ */
+String encode_batch_params(ProtocolVersion version) {
+  QueryRequest::Ptr statement(new QueryRequest("INSERT INTO t (k) VALUES (1)", 0));
+
+  // SharedRefPtr takes ownership, so the request must be heap allocated.
+  BatchRequest* batch = new BatchRequest(CASS_BATCH_TYPE_LOGGED);
+  batch->add_statement(statement.get());
+  batch->set_consistency(CASS_CONSISTENCY_ONE);
+  batch->set_serial_consistency(CASS_CONSISTENCY_LOCAL_SERIAL);
+  batch->set_timestamp(0x0102030405060708LL);
+  batch->set_now_in_seconds(1234);
+  // Quoted on the way in, unescaped on the wire.
+  batch->set_keyspace("\"CaseSensitive\"");
+
+  Request::ConstPtr request(batch);
+  NoOpRequestCallback callback(request);
+
+  BufferVec bufs;
+  // BatchRequest::encode() is private; dispatch through the base interface.
+  const Request* base = request.get();
+  EXPECT_GT(base->encode(version, &callback, &bufs), 0);
+
+  if (bufs.empty()) {
+    return String();
+  }
+  const Buffer& params = bufs.back();
+  return String(params.data(), params.size());
+}
+
+} // namespace
+
+/**
+ * Protocol v5 widened <flags> to [int] and requires the parameter block to be
+ * ordered <serial_consistency><timestamp><keyspace><now_in_seconds>. Encoding
+ * <now_in_seconds> ahead of <keyspace> desynchronizes the reader, so assert the
+ * exact bytes. CQL integers are big endian.
+ */
+TEST_F(FrameUnitTest, BatchV5QueryParamOrder) {
+  String params = encode_batch_params(ProtocolVersion(CASS_PROTOCOL_VERSION_V5));
+  const char* p = params.data();
+
+  // consistency[2] flags[4] serial[2] timestamp[8] keyspace[2+13] now[4]
+  ASSERT_EQ(2u + 4u + 2u + 8u + 2u + 13u + 4u, params.size());
+
+  // <consistency> [short] = ONE
+  EXPECT_EQ(0x00, p[0]);
+  EXPECT_EQ(0x01, p[1]);
+
+  // <flags> [int]: serial | timestamp | keyspace | now_in_seconds
+  EXPECT_EQ(0x00, p[2]);
+  EXPECT_EQ(0x00, p[3]);
+  EXPECT_EQ(0x01, p[4]);
+  EXPECT_EQ(0xb0, static_cast<unsigned char>(p[5]));
+
+  // <serial_consistency> [short] = LOCAL_SERIAL (0x0009)
+  EXPECT_EQ(0x00, p[6]);
+  EXPECT_EQ(0x09, p[7]);
+
+  // <timestamp> [long]
+  for (int i = 0; i < 8; ++i) {
+    EXPECT_EQ(static_cast<char>(0x01 + i), p[8 + i]);
+  }
+
+  // <keyspace> [string]: 13 characters, quotes stripped by unescape_id()
+  EXPECT_EQ(0x00, p[16]);
+  EXPECT_EQ(0x0d, p[17]);
+  EXPECT_EQ("CaseSensitive", String(p + 18, 13));
+
+  // <now_in_seconds> [int] = 1234 -- must come last.
+  EXPECT_EQ(0x00, p[31]);
+  EXPECT_EQ(0x00, p[32]);
+  EXPECT_EQ(0x04, p[33]);
+  EXPECT_EQ(0xd2, static_cast<unsigned char>(p[34]));
+}
+
+/**
+ * DSE v2 predates the With_now_in_seconds flag but still uses the widened
+ * four byte <flags> introduced by v5, so the field width must not be tied to
+ * now_in_seconds support.
+ */
+TEST_F(FrameUnitTest, BatchV4KeepsNarrowFlags) {
+  const String v4 = encode_batch_params(ProtocolVersion(CASS_PROTOCOL_VERSION_V4));
+
+  // v4 keeps <flags> as a single byte and never carries a keyspace or
+  // now_in_seconds, so only consistency/serial/timestamp are present.
+  ASSERT_EQ(2u + 1u + 2u + 8u, v4.size());
+  EXPECT_EQ(0x30, static_cast<unsigned char>(v4.data()[2])); // serial | timestamp
+}
+
+/**
+ * DSE v2 predates the With_now_in_seconds flag but still uses the widened four
+ * byte <flags>, so the field width must follow query_flags_size() rather than
+ * now_in_seconds support. Encoding a single byte here would desynchronize every
+ * following field.
+ */
+TEST_F(FrameUnitTest, BatchDseV2KeepsWideFlags) {
+  const String dse = encode_batch_params(ProtocolVersion(CASS_PROTOCOL_VERSION_DSEV2));
+
+  // DSE v2 supports the keyspace field but not now_in_seconds, so it carries
+  // every field except the trailing [int].
+  // consistency[2] flags[4] serial[2] timestamp[8] keyspace[2+13]
+  ASSERT_EQ(2u + 4u + 2u + 8u + 2u + 13u, dse.size());
+  const char* p = dse.data();
+
+  // <flags> [int] = serial | timestamp | keyspace (no now_in_seconds)
+  EXPECT_EQ(0x00, p[2]);
+  EXPECT_EQ(0x00, p[3]);
+  EXPECT_EQ(0x00, p[4]);
+  EXPECT_EQ(0xb0, static_cast<unsigned char>(p[5]));
+
+  // <serial_consistency> [short] = LOCAL_SERIAL
+  EXPECT_EQ(0x00, p[6]);
+  EXPECT_EQ(0x09, p[7]);
+
+  // <keyspace> [string], still unescaped
+  EXPECT_EQ("CaseSensitive", String(p + 18, 13));
 }

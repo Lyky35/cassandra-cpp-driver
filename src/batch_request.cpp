@@ -186,7 +186,7 @@ int BatchRequest::encode(ProtocolVersion version, RequestCallback* callback,
     Buffer buf(buf_size);
 
     size_t pos = buf.encode_uint16(0, callback->consistency());
-    if (version.supports_now_in_seconds()) {
+    if (version.query_flags_size() == sizeof(int32_t)) {
       // v5 widened <flags> to [int] to make room for With_now_in_seconds.
       pos = buf.encode_int32(pos, flags);
     } else {
@@ -201,12 +201,12 @@ int BatchRequest::encode(ProtocolVersion version, RequestCallback* callback,
       pos = buf.encode_int64(pos, callback->timestamp());
     }
 
-    if (version.supports_now_in_seconds() && callback->now_in_seconds() != CASS_INT32_MIN) {
-      pos = buf.encode_int32(pos, callback->now_in_seconds());
-    }
-
     if (!wire_keyspace.empty()) {
       pos = buf.encode_string(pos, wire_keyspace.data(), static_cast<uint16_t>(wire_keyspace.size()));
+    }
+
+    if (version.supports_now_in_seconds() && callback->now_in_seconds() != CASS_INT32_MIN) {
+      pos = buf.encode_int32(pos, callback->now_in_seconds());
     }
 
     bufs->push_back(buf);
