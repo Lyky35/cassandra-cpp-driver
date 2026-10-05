@@ -421,6 +421,9 @@ TEST_F(FrameUnitTest, CompressedReferenceFrameBytes) {
             FrameCodec::decode_uint32(framed.data() + 8 + 50));
 }
 
+#ifdef HAVE_LZ4
+// Without liblz4 the encoder stores the payload as-is, so this is the one
+// compressed-frame test that only makes sense when compression is available.
 TEST_F(FrameUnitTest, CompressedFrameIsActuallyCompressed) {
   // A long, highly compressible payload must shrink and report a non zero
   // uncompressed length.
@@ -442,6 +445,7 @@ TEST_F(FrameUnitTest, CompressedFrameIsActuallyCompressed) {
   EXPECT_EQ(framed.size(), clen + FrameCodec::COMPRESSED_OVERHEAD);
   EXPECT_TRUE((packed & (static_cast<uint64_t>(1) << 34)) != 0);
 }
+#endif // HAVE_LZ4
 
 TEST_F(FrameUnitTest, CompressedRoundTripContiguous) {
   for (size_t size = 0; size < 512; ++size) {

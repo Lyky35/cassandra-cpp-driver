@@ -554,10 +554,14 @@ FrameDecoder::Result FrameDecoder::next(const char** payload, size_t* size) {
     if (payload_size_ + add > MAX_PAYLOAD_SIZE) {
       return fail("Frame payload exceeds the maximum reassembled size");
     }
-    const size_t old_size = payload_.size();
-    payload_.resize(old_size + add);
-    memcpy(&payload_[old_size], needs_decompression ? &decompressed_[0] : frame_payload, add);
-    payload_size_ += add;
+    // Guarded because indexing an empty vector is out of bounds even when the
+    // copy is zero bytes long, which is the case for an empty frame.
+    if (add > 0) {
+      const size_t old_size = payload_.size();
+      payload_.resize(old_size + add);
+      memcpy(&payload_[old_size], needs_decompression ? &decompressed_[0] : frame_payload, add);
+      payload_size_ += add;
+    }
     accumulation_offset_ += frame_size;
 
     // A self contained frame ends the payload here; a multi frame payload ends
@@ -565,7 +569,10 @@ FrameDecoder::Result FrameDecoder::next(const char** payload, size_t* size) {
     // Either way payload_ is handed out and reset for the next payload.
     const bool complete = self_contained || payload_complete();
     if (complete) {
-      *payload = &payload_[0];
+      // A zero length payload leaves payload_ empty, and taking &payload_[0]
+      // of an empty vector is out of bounds; a null pointer with a zero size
+      // is the same thing every caller here expects.
+      *payload = payload_.empty() ? NULL : &payload_[0];
       *size = payload_size_;
       payload_.clear();
       payload_size_ = 0;

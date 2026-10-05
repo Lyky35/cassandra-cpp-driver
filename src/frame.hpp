@@ -343,7 +343,8 @@ public:
    * accumulation buffer, so it is only valid until the next call to next() or
    * feed(). Consume it before calling either.
    *
-   * @param payload Set to the de-framed bytes when returning RESULT_OK.
+   * @param payload Set to the de-framed bytes when returning RESULT_OK, or
+   * NULL when the payload is empty.
    * @param size Set to the length of `payload` when returning RESULT_OK.
    * @return The result of the attempt.
    */
