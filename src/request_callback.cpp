@@ -47,6 +47,7 @@ void RequestWrapper::init(const ExecutionProfile& profile,
 void RequestCallback::notify_write(Connection* connection, int stream) {
   protocol_version_ = connection->protocol_version();
   framed_ = connection->use_frame_codec();
+  compression_ = connection->frame_compression();
   stream_ = stream;
   on_write(connection);
 }
@@ -103,7 +104,7 @@ int32_t RequestCallback::encode(BufferVec* bufs) {
     return static_cast<int32_t>(envelope_size);
   }
 
-  if (envelope_size <= FrameCodec::MAX_PAYLOAD_LENGTH) {
+  if (compression_ == FRAME_COMPRESSION_NONE && envelope_size <= FrameCodec::MAX_PAYLOAD_LENGTH) {
     // Common case: one self contained frame. Splice the frame header in ahead of
     // the envelope and append the CRC32 trailer. The payload buffers are
     // referenced directly rather than copied.
@@ -119,10 +120,12 @@ int32_t RequestCallback::encode(BufferVec* bufs) {
     return static_cast<int32_t>(envelope_size + FrameCodec::OVERHEAD);
   }
 
-  // Rare case: the envelope is too large for a single frame and has to be
-  // split across several, which requires reworking the buffer list.
+  // A compressed connection, or an envelope too large for a single frame, both
+  // need the buffer list reworked by the full encoder. That copies the payload
+  // when compressing, which is unavoidable.
   BufferVec framed;
-  const int32_t framed_size = FrameCodec::encode(*bufs, index, bufs->size(), &framed);
+  const int32_t framed_size =
+      FrameCodec::encode(*bufs, index, bufs->size(), &framed, compression_);
   bufs->resize(index);
   bufs->insert(bufs->end(), framed.begin(), framed.end());
   return framed_size;

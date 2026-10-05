@@ -19,6 +19,7 @@
 #include "driver_info.hpp"
 #include "query_request.hpp"
 #include "session.hpp"
+#include "startup_request.hpp"
 
 #define APPLICATION_NAME "DataStax C/C++ Test Harness"
 #define APPLICATION_VERSION "1.0.0"
@@ -33,6 +34,32 @@ inline bool operator==(const CassUuid& rhs, const CassUuid& lhs) {
 }
 
 inline bool operator!=(const CassUuid& rhs, const CassUuid& lhs) { return !(rhs == lhs); }
+
+namespace {
+
+/**
+ * The STARTUP option map a request produces for the given protocol version.
+ *
+ * These go through the encoder directly rather than a mock server: which
+ * options get sent is a property of the request, and COMPRESSION in particular
+ * depends only on the negotiated protocol version.
+ */
+void startup_options(FrameCompression compression, ProtocolVersion version,
+                     Map<String, String>* options) {
+  // Owned by the ref counted pointer, which is what Request expects.
+  Request::ConstPtr request(
+      new StartupRequest(APPLICATION_NAME, APPLICATION_VERSION, "", false, compression));
+
+  BufferVec bufs;
+  EXPECT_GT(request->encode(version, NULL, &bufs), 0);
+  EXPECT_EQ(1u, bufs.size());
+  if (bufs.size() != 1) return;
+
+  Decoder decoder(bufs[0].data(), bufs[0].size(), version);
+  EXPECT_TRUE(decoder.decode_string_map(*options));
+}
+
+} // namespace
 
 class StartupRequestUnitTest : public Unit {
 public:
@@ -161,4 +188,30 @@ TEST_F(StartupRequestUnitTest, SetClientId) {
   ASSERT_EQ(CASS_DEFAULT_CQL_VERSION, options["CQL_VERSION"]);
   ASSERT_EQ(driver_name(), options["DRIVER_NAME"]);
   ASSERT_EQ(driver_version(), options["DRIVER_VERSION"]);
+}
+
+TEST(StartupOptionsCompression, RequestsLz4OnV5) {
+  Map<String, String> options;
+  startup_options(FRAME_COMPRESSION_LZ4, ProtocolVersion(5), &options);
+  EXPECT_EQ(1u, options.count("COMPRESSION"));
+  EXPECT_EQ("lz4", options["COMPRESSION"]);
+}
+
+TEST(StartupOptionsCompression, OmitsCompressionByDefault) {
+  Map<String, String> options;
+  startup_options(FRAME_COMPRESSION_NONE, ProtocolVersion(5), &options);
+  EXPECT_EQ(0u, options.count("COMPRESSION"));
+}
+
+TEST(StartupOptionsCompression, OmitsCompressionOnEarlierProtocolVersions) {
+  // Compression is a v5 feature. Asking for it on an earlier version would
+  // request an algorithm that version cannot frame with, so the option is left
+  // out and the connection simply runs uncompressed.
+  ProtocolVersion versions[] = { ProtocolVersion(1), ProtocolVersion(2), ProtocolVersion(3),
+                                 ProtocolVersion(4) };
+  for (size_t i = 0; i < sizeof(versions) / sizeof(versions[0]); ++i) {
+    Map<String, String> options;
+    startup_options(FRAME_COMPRESSION_LZ4, versions[i], &options);
+    EXPECT_EQ(0u, options.count("COMPRESSION")) << "for protocol v" << versions[i].value();
+  }
 }

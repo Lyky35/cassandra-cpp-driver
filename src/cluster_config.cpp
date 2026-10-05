@@ -77,6 +77,24 @@ CassError cass_cluster_set_use_beta_protocol_version(CassCluster* cluster, cass_
   return CASS_OK;
 }
 
+CassError cass_cluster_set_compression(CassCluster* cluster, CassCompression compression) {
+  if (compression != CASS_COMPRESSION_NONE && compression != CASS_COMPRESSION_LZ4) {
+    LOG_ERROR("Unknown compression algorithm %d", static_cast<int>(compression));
+    return CASS_ERROR_LIB_BAD_PARAMS;
+  }
+
+  const FrameCompression frame_compression =
+      compression == CASS_COMPRESSION_LZ4 ? FRAME_COMPRESSION_LZ4 : FRAME_COMPRESSION_NONE;
+
+  if (!frame_compression_available(frame_compression)) {
+    LOG_ERROR("LZ4 compression is not available; the driver was built without liblz4");
+    return CASS_ERROR_LIB_BAD_PARAMS;
+  }
+
+  cluster->config().set_compression(frame_compression);
+  return CASS_OK;
+}
+
 CassError cass_cluster_set_consistency(CassCluster* cluster, CassConsistency consistency) {
   if (consistency == CASS_CONSISTENCY_UNKNOWN) {
     return CASS_ERROR_LIB_BAD_PARAMS;

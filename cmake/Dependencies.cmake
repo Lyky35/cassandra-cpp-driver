@@ -140,6 +140,26 @@ if(CASS_USE_ZLIB)
 endif()
 
 #------------------------
+# LZ4
+#------------------------
+
+# LZ4 provides the frame payload compression used by protocol v5. The driver
+# still builds without it, but protocol v5 compression is then unavailable.
+if(CASS_USE_LZ4)
+  find_path(LZ4_INCLUDE_DIR lz4.h)
+  find_library(LZ4_LIBRARY NAMES lz4)
+
+  if(LZ4_INCLUDE_DIR AND LZ4_LIBRARY)
+    set(CASS_INCLUDES ${CASS_INCLUDES} ${LZ4_INCLUDE_DIR})
+    set(CASS_LIBS ${CASS_LIBS} ${LZ4_LIBRARY})
+    set(HAVE_LZ4 On)
+    message(STATUS "Using LZ4: ${LZ4_LIBRARY}")
+  else()
+    message(WARNING "Could not find liblz4; protocol v5 frame compression will be unavailable")
+  endif()
+endif()
+
+#------------------------
 # Kerberos
 #------------------------
 

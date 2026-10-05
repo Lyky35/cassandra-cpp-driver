@@ -23,6 +23,7 @@
 #include "cluster_metadata_resolver.hpp"
 #include "constants.hpp"
 #include "execution_profile.hpp"
+#include "frame.hpp"
 #include "protocol.hpp"
 #include "reconnection_policy.hpp"
 #include "speculative_execution.hpp"
@@ -71,6 +72,7 @@ public:
       , prepare_on_all_hosts_(CASS_DEFAULT_PREPARE_ON_ALL_HOSTS)
       , prepare_on_up_or_add_host_(CASS_DEFAULT_PREPARE_ON_UP_OR_ADD_HOST)
       , no_compact_(CASS_DEFAULT_NO_COMPACT)
+      , compression_(FRAME_COMPRESSION_NONE)
       , is_client_id_set_(false)
       , host_listener_(new DefaultHostListener())
       , monitor_reporting_interval_secs_(CASS_DEFAULT_CLIENT_MONITOR_EVENTS_INTERVAL_SECS)
@@ -331,6 +333,15 @@ public:
 
   void set_no_compact(bool enabled) { no_compact_ = enabled; }
 
+  /**
+   * The frame payload compression requested for new connections.
+   *
+   * Compression requires protocol v5; it is ignored for earlier versions.
+   */
+  FrameCompression compression() const { return compression_; }
+
+  void set_compression(FrameCompression compression) { compression_ = compression; }
+
   const String& application_name() const { return application_name_; }
 
   void set_application_name(const String& application_name) {
@@ -440,6 +451,7 @@ private:
   bool prepare_on_up_or_add_host_;
   Address local_address_;
   bool no_compact_;
+  FrameCompression compression_;
   String application_name_;
   String application_version_;
   bool is_client_id_set_;

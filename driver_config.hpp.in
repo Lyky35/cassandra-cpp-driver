@@ -14,5 +14,6 @@
 #cmakedefine HAVE_GETRANDOM
 #cmakedefine HAVE_TIMERFD
 #cmakedefine HAVE_ZLIB
+#cmakedefine HAVE_LZ4
 
 #endif

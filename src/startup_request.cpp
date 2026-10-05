@@ -41,6 +41,13 @@ int StartupRequest::encode(ProtocolVersion version, RequestCallback* callback,
   if (no_compact_enabled_) {
     options["NO_COMPACT"] = "true";
   }
+  // Compression is a protocol v5 feature. Requesting it on an earlier version
+  // would ask the server for a v5-only algorithm, so only send it when the
+  // negotiated version can actually compress frames. LZ4 is the only algorithm
+  // v5 allows; Snappy was removed and is rejected by the server.
+  if (version.supports_framing() && compression_ == FRAME_COMPRESSION_LZ4) {
+    options["COMPRESSION"] = "lz4";
+  }
 
   for (OptionsMap::const_iterator it = options.begin(), end = options.end(); it != end; ++it) {
     length += sizeof(uint16_t) + it->first.size();

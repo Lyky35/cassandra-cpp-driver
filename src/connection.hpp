@@ -140,7 +140,8 @@ public:
    * @param heartbeat_interval_secs The interval (in seconds) to send a heartbeat.
    */
   Connection(const Socket::Ptr& socket, const Host::Ptr& host, ProtocolVersion protocol_version,
-             unsigned int idle_timeout_secs, unsigned int heartbeat_interval_secs);
+             unsigned int idle_timeout_secs, unsigned int heartbeat_interval_secs,
+             FrameCompression compression = FRAME_COMPRESSION_NONE);
   ~Connection();
 
   /**
@@ -221,6 +222,18 @@ public:
     return handshake_complete_ && protocol_version_.supports_framing();
   }
 
+  /**
+   * The frame payload compression in effect on this connection.
+   *
+   * Compression is only negotiated for protocol v5, so this is always
+   * FRAME_COMPRESSION_NONE on earlier versions. It is reported as
+   * FRAME_COMPRESSION_NONE until the handshake completes because the server
+   * rejects the connection outright if it cannot honor the request.
+   */
+  FrameCompression frame_compression() const {
+    return use_frame_codec() ? compression_ : FRAME_COMPRESSION_NONE;
+  }
+
   const String& keyspace() { return keyspace_; }
   uv_loop_t* loop() { return socket_->loop(); }
   const uv_tcp_t* handle() const { return socket_->handle(); }
@@ -268,6 +281,7 @@ private:
   ConnectionListener* listener_;
 
   ProtocolVersion protocol_version_;
+  FrameCompression compression_;
   String keyspace_;
 
   unsigned int idle_timeout_secs_;

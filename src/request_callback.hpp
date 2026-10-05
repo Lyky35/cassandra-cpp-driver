@@ -21,6 +21,7 @@
 #include "cassandra.h"
 #include "constants.hpp"
 #include "dense_hash_map.hpp"
+#include "frame.hpp"
 #include "list.hpp"
 #include "prepared.hpp"
 #include "request.hpp"
@@ -136,6 +137,7 @@ public:
   RequestCallback(const RequestWrapper& wrapper)
       : wrapper_(wrapper)
       , framed_(false)
+      , compression_(FRAME_COMPRESSION_NONE)
       , stream_(-1)
       , state_(REQUEST_STATE_NEW)
       , retry_consistency_(CASS_CONSISTENCY_UNKNOWN) {}
@@ -213,10 +215,16 @@ private:
    */
   bool framed() const { return framed_; }
 
+  /**
+   * The frame payload compression captured when the write was notified.
+   */
+  FrameCompression compression() const { return compression_; }
+
 private:
   const RequestWrapper wrapper_;
   ProtocolVersion protocol_version_;
   bool framed_;
+  FrameCompression compression_;
   int stream_;
   State state_;
   CassConsistency retry_consistency_;

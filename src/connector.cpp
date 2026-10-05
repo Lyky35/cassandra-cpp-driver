@@ -154,7 +154,8 @@ ConnectionSettings::ConnectionSettings()
     , auth_provider(new AuthProvider())
     , idle_timeout_secs(CASS_DEFAULT_IDLE_TIMEOUT_SECS)
     , heartbeat_interval_secs(CASS_DEFAULT_HEARTBEAT_INTERVAL_SECS)
-    , no_compact(CASS_DEFAULT_NO_COMPACT) {}
+    , no_compact(CASS_DEFAULT_NO_COMPACT)
+    , compression(FRAME_COMPRESSION_NONE) {}
 
 ConnectionSettings::ConnectionSettings(const Config& config)
     : socket_settings(config)
@@ -163,6 +164,7 @@ ConnectionSettings::ConnectionSettings(const Config& config)
     , idle_timeout_secs(config.connection_idle_timeout_secs())
     , heartbeat_interval_secs(config.connection_heartbeat_interval_secs())
     , no_compact(config.no_compact())
+    , compression(config.compression())
     , application_name(config.application_name())
     , application_version(config.application_version()) {}
 
@@ -285,7 +287,7 @@ void Connector::on_supported(ResponseMessage* response) {
   connection_->write_and_flush(RequestCallback::Ptr(new StartupCallback(
       this, Request::ConstPtr(new StartupRequest(settings_.application_name,
                                                  settings_.application_version, settings_.client_id,
-                                                 settings_.no_compact)))));
+                                                 settings_.no_compact, settings_.compression)))));
 }
 
 void Connector::on_authenticate(const String& class_name) {
@@ -336,7 +338,7 @@ void Connector::on_connect(SocketConnector* socket_connector) {
     Socket::Ptr socket(socket_connector->release_socket());
 
     connection_.reset(new Connection(socket, host_, protocol_version_, settings_.idle_timeout_secs,
-                                     settings_.heartbeat_interval_secs));
+                                     settings_.heartbeat_interval_secs, settings_.compression));
     connection_->set_listener(this);
 
     if (socket_connector->ssl_session()) {

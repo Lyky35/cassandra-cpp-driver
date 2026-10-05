@@ -647,6 +647,19 @@ typedef enum CassProtocolVersion_ {
                                            driver with DataStax Enterprise */
 } CassProtocolVersion;
 
+/**
+ * Frame payload compression.
+ *
+ * Compression is only available with protocol v5. Snappy, which older protocol
+ * versions allowed, was removed in v5 and is rejected by the server.
+ *
+ * @since 2.18.0
+ */
+typedef enum CassCompression_ {
+  CASS_COMPRESSION_NONE = 0x00, /**< No compression */
+  CASS_COMPRESSION_LZ4  = 0x01  /**< LZ4 compression */
+} CassCompression;
+
 typedef enum  CassErrorSource_ {
   CASS_ERROR_SOURCE_NONE,
   CASS_ERROR_SOURCE_LIB,
@@ -1630,6 +1643,38 @@ cass_cluster_set_protocol_version(CassCluster* cluster,
 CASS_EXPORT CassError
 cass_cluster_set_use_beta_protocol_version(CassCluster* cluster,
                                            cass_bool_t enable);
+
+/**
+ * Set the frame payload compression used on new connections.
+ *
+ * Compression is negotiated during the initial handshake via the STARTUP
+ * message's COMPRESSION option and requires protocol v5; earlier versions
+ * never compress. If the connected server does not support the requested
+ * algorithm the connection fails to start.
+ *
+ * Payloads smaller than 128 bytes are sent uncompressed even when compression
+ * is enabled, because the framing overhead dominates at that size.
+ *
+ * <b>Default:</b> CASS_COMPRESSION_NONE
+ *
+ * <b>Note:</b> Snappy was removed in protocol v5 and is rejected by the
+ * server, so it cannot be selected.
+ *
+ * @since 2.18.0
+ *
+ * @public @memberof CassCluster
+ *
+ * @param[in] cluster
+ * @param[in] compression
+ * @return CASS_OK if successful, otherwise an error occurred. Compression
+ * returns CASS_ERROR_LIB_BAD_PARAMS if the driver was built without LZ4
+ * support.
+ *
+ * @see cass_cluster_set_protocol_version()
+ */
+CASS_EXPORT CassError
+cass_cluster_set_compression(CassCluster* cluster,
+                             CassCompression compression);
 
 /**
  * Sets default consistency level of statement.

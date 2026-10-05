@@ -104,13 +104,16 @@ void RecordingConnectionListener::process_events(const EventResponse::Vec& event
 
 Connection::Connection(const Socket::Ptr& socket, const Host::Ptr& host,
                        ProtocolVersion protocol_version, unsigned int idle_timeout_secs,
-                       unsigned int heartbeat_interval_secs)
+                       unsigned int heartbeat_interval_secs,
+                       FrameCompression compression)
     : socket_(socket)
     , host_(host)
     , inflight_request_count_(0)
     , response_(new ResponseMessage())
+    , frame_decoder_(compression)
     , listener_(&nop_listener__)
     , protocol_version_(protocol_version)
+    , compression_(compression)
     , idle_timeout_secs_(idle_timeout_secs)
     , heartbeat_interval_secs_(heartbeat_interval_secs)
     , handshake_complete_(false)

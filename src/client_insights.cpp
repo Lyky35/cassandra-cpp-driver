@@ -308,7 +308,15 @@ private:
     writer.Key("heartbeatInterval");
     writer.Uint64(config_.connection_heartbeat_interval_secs() * 1000); // in milliseconds
     writer.Key("compression");
-    writer.String("NONE"); // TODO: Update once compression is added
+    switch (config_.compression()) {
+      case FRAME_COMPRESSION_LZ4:
+        writer.String("LZ4");
+        break;
+      case FRAME_COMPRESSION_NONE:
+      default:
+        writer.String("NONE");
+        break;
+    }
     reconnection_policy(writer);
     ssl(writer);
     auth_provider(writer);

@@ -18,6 +18,7 @@
 #define DATASTAX_INTERNAL_STARTUP_REQUEST_HPP
 
 #include "constants.hpp"
+#include "frame.hpp"
 #include "map.hpp"
 #include "request.hpp"
 #include "scoped_ptr.hpp"
@@ -28,17 +29,20 @@ namespace datastax { namespace internal { namespace core {
 class StartupRequest : public Request {
 public:
   StartupRequest(const String& application_name, const String& application_version,
-                 const String& client_id, bool no_compact_enabled)
+                 const String& client_id, bool no_compact_enabled,
+                 FrameCompression compression = FRAME_COMPRESSION_NONE)
       : Request(CQL_OPCODE_STARTUP)
       , application_name_(application_name)
       , application_version_(application_version)
       , client_id_(client_id)
-      , no_compact_enabled_(no_compact_enabled) {}
+      , no_compact_enabled_(no_compact_enabled)
+      , compression_(compression) {}
 
   const String& application_name() const { return application_name_; }
   const String& application_version() const { return application_version_; }
   const String& client_id() const { return client_id_; }
   bool no_compact_enabled() const { return no_compact_enabled_; }
+  FrameCompression compression() const { return compression_; }
 
 private:
   int encode(ProtocolVersion version, RequestCallback* callback, BufferVec* bufs) const;
@@ -50,6 +54,7 @@ private:
   String application_version_;
   String client_id_;
   bool no_compact_enabled_;
+  FrameCompression compression_;
 };
 
 }}} // namespace datastax::internal::core
