@@ -4,20 +4,38 @@
 Features
 --------
 * [CPP-1000] Native protocol v5 support. Framing (CRC24 header, CRC32 trailer,
-  split frames up to 131071 bytes), per-request keyspace for QUERY/EXECUTE and
-  BATCH, and the Now_in_seconds query flag. Uncompressed framing only.
+  split frames up to 131060 bytes), per-request keyspace for QUERY/EXECUTE and
+  BATCH, and the Now_in_seconds query flag.
+* [CPP-1000] LZ4 frame payload compression for protocol v5, enabled with
+  `cass_cluster_set_compression(cluster, CASS_COMPRESSION_LZ4)`. Snappy was
+  removed in v5 and is rejected by the server, so LZ4 is the only algorithm.
+  Requires liblz4; configure with `CASS_USE_LZ4=OFF` to build without it.
+
+Bug Fixes
+--------
+* Correct the multi-frame payload framing used by protocol v5. The self
+  contained flag means "this frame carries only whole envelopes" rather than
+  "this is the last frame of the payload", so it is now clear on every frame of
+  a multi frame payload including the last. Setting it on the final frame made
+  the server try to parse an envelope header out of a fragment and drop the
+  connection, which broke every request or response over 128 KB.
+* Correct the maximum frame payload to 131060 bytes. A frame including the
+  widest header and its trailer must fit in 2^17 bytes; the previous bound of
+  2^17 - 1 allowed frames the server rejects.
+* Fix an out of bounds access when reassembling a frame that carries an empty
+  payload.
 
 Compatibility
 -------------
 * This version negotiates protocol v5 by default when the server supports it.
   Set `cass_cluster_set_protocol_version(cluster, CASS_PROTOCOL_VERSION_V4)` to
   pin v4, or `CASS_PROTOCOL_VERSION_DSEV2` for DataStax Enterprise.
-* Verified against Apache Cassandra 5.0.9 over both v5 and v4.
+* Compression requires protocol v5. Requesting it on an earlier version is
+  ignored and the connection runs uncompressed.
+* Verified against Apache Cassandra 5.0.9 over v5 none, v5 LZ4, and v4.
 
 Known Limitations
 -----------------
-* Compressed frames are not implemented. A server that negotiates frame
-  compression is not supported.
 * `Now_in_seconds` has no public C API; it is currently internal only.
 * The full unit suite requires exclusive use of port 9042.
 

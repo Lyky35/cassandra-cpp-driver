@@ -27,6 +27,7 @@ The C/C++ driver depends on the following software:
 * [CMake] v2.8.12+
 * [libuv] 1.x
 * Kerberos v5 ([Heimdal] or [MIT]) \*
+* [lz4] v1.x \*\*\*\*
 * [OpenSSL] v1.0.x, v1.1.x or v3.x \*\*
 * [zlib] v1.x \*\*\*
 
@@ -41,6 +42,13 @@ __\*\*__ Use the `CASS_USE_OPENSSL` CMake option to enable/disable OpenSSL
 __\*\*\*__ Use the `CASS_USE_ZLIB` CMake option to enable/disable zlib support.
            Disabling this option will disable DataStax Astra support
            within the driver; defaults to `On`.
+
+__\*\*\*\*__ Use the `CASS_USE_LZ4` CMake option to enable/disable LZ4 support.
+            This provides the frame payload compression used by native
+            protocol v5. When the library is not found the driver still
+            builds, but selecting compression through
+            `cass_cluster_set_compression()` fails with
+            `CASS_ERROR_LIB_BAD_PARAMS`; defaults to `On`.
 
 ### A Brief Note on OpenSSL 3.x
 
@@ -338,6 +346,7 @@ cmake -G "Visual Studio 16 2019" -A x64 -DCASS_BUILD_UNIT_TESTS=On ..
 [k4w-32]: http://web.mit.edu/kerberos/dist/kfw/4.0/kfw-4.0.1-i386.msi
 [k4w-64]: http://web.mit.edu/kerberos/dist/kfw/4.0/kfw-4.0.1-amd64.msi
 [libuv]: http://libuv.org
+[lz4]: https://lz4.org
 [Heimdal]: https://www.h5l.org
 [MIT]: https://web.mit.edu/kerberos
 [OpenSSL]: https://www.openssl.org

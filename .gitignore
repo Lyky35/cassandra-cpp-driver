@@ -51,6 +51,8 @@ Debug
 demo/cassandra_demo
 test/unit_tests/cassandra_test
 src/driver_config.hpp
+_install
+_install/
 
 # API docs files
 Doxyfile

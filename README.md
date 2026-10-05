@@ -27,11 +27,16 @@ The driver depends on the following libraries:
 * libuv (1.x)
 * OpenSSL
 * zlib
+* liblz4 (optional, for protocol v5 frame compression; enabled by default)
 
 The version of OpenSSL and zlib provided with each Linux distribution above can be used
 to build the driver.  A version of libuv > 1.x is provided for CentOS 7 and Rocky
 Linux; this can be found under the `dependencies` directory for each platform.
-Packages for all three dependencies are provided for Windows distributions.
+Packages for libuv, OpenSSL and zlib are provided for Windows distributions.
+
+If liblz4 is not found the driver still builds, but frame compression is
+unavailable and selecting it fails with `CASS_ERROR_LIB_BAD_PARAMS`. Configure
+with `-DCASS_USE_LZ4=OFF` to build without it deliberately.
 
 ## Upgrading
 
@@ -89,6 +94,7 @@ dependencies for a specific platform.
 * Support for [DataStax Astra] Cloud Data Platform
 * Native protocol v5
   * Frame format with CRC24 header and CRC32 trailer checksums
+  * LZ4 frame payload compression
   * Per-request keyspace for QUERY, EXECUTE, and BATCH
   * Automatic protocol negotiation, downgrading to v4 or DSEv2 as needed
 
@@ -111,10 +117,28 @@ required to use it. To pin a specific version:
 cass_cluster_set_protocol_version(cluster, CASS_PROTOCOL_VERSION_V5);
 ```
 
+#### Frame compression
+
+Protocol v5 can compress frame payloads. Compression is negotiated during the
+initial handshake and requires protocol v5, so it is ignored on earlier
+versions. To enable it:
+
+```c
+cass_cluster_set_compression(cluster, CASS_COMPRESSION_LZ4);
+```
+
+When compression is negotiated the frame header widens from 6 to 8 bytes to
+carry both the compressed and uncompressed payload lengths, and every frame on
+that connection uses the wider header, including frames whose payload is stored
+uncompressed. Payloads smaller than 128 bytes are sent uncompressed because
+the framing overhead outweighs any saving at that size.
+
+LZ4 is the only algorithm available: protocol v5 removed Snappy, and a server
+negotiating v5 rejects it. A server that cannot honor the request fails the
+connection rather than silently continuing uncompressed.
+
 Current limitations:
 
-* Only uncompressed frames are implemented. A server that negotiates frame
-  compression is not supported.
 * The `Now_in_seconds` query flag is implemented internally but has no public
   C API yet.
 
